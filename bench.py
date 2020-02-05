@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os
-import gc
 import sys
 import math
 import json
@@ -19,6 +18,7 @@ from ramdisk import ram_disk
 
 
 warnings.filterwarnings("ignore")
+openbabel.obErrorLog.StopLogging()
 
 MAX_REPETITIONS = 30
 MAX_TIME_SECONDS = 10
@@ -95,7 +95,11 @@ def print_results(data):
         for result in value["results"]:
             if math.isnan(result["time"]):
                 continue
-            print("    {:30} {:.2f}ms".format(result["path"], result["time"]))
+            print("    {:20} ave: {:.2f}ms over {} repetitions".format(
+                result["path"],
+                result["time"],
+                result["repetitions"],
+            ))
     print()
 
 
@@ -113,7 +117,7 @@ FILES = [
 ]
 
 
-def main():
+def main(use_ramdisk):
     results = {}
     for package in BENCHMARKS.keys():
         results[package] = {
@@ -121,7 +125,7 @@ def main():
             "results": [],
         }
 
-    with ram_disk() as root:
+    with ram_disk(use_ramdisk) as root:
         os.mkdir(os.path.join(root, "files"))
         for file in FILES:
             new_path = os.path.join(root, file)
@@ -131,10 +135,10 @@ def main():
             for package, function in BENCHMARKS.items():
                 r = run_benchmark(new_path, function)
                 results[package]["results"].append(r)
-        gc.collect()
 
     print_results(results)
 
 
 if __name__ == '__main__':
-    main()
+    use_ramdisk = "--no-ramdisk" not in sys.argv
+    main(use_ramdisk)
