@@ -15,6 +15,18 @@ Libraries compared:
 - [OpenBabel](http://openbabel.org/)
 - [ASE](https://wiki.fysik.dtu.dk/ase/)
 
+## Running the benchmarks on your system
+
+```bash
+git clone https://github.com/chemfiles/benchmarks
+cd benchmarks
+pip install -r requirements.txt  # or use conda to install everything
+python bench.py
+
+# run without the ramdisk (Windows or Linux without sudo)
+python bench.py --no-ramdisk
+```
+
 ## Caveats
 
 Different libraries are able to read different formats, and can sometimes do
