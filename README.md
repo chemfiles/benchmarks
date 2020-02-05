@@ -34,6 +34,11 @@ In most of the tested cases, chemfiles is faster than other softwares.
 Exceptions to this seems to be the SDF reader in ASE, and the XTC reader in
 MDAnalysis.
 
+Each library is tested with multiple format (text formats, direct reading of
+compressed text, and binary formats). For each library, the time required to
+open and read the full trajectory is reported; as well as the timing ratio with
+respect to chemfiles (higher is slower).
+
 ### macOS 10.14, SSD APFS, Intel Core i7-4870HQ
 
 | file               | chemfiles (v0.9.2)   | MDAnalysis (v0.20.1)   | openbabel (v3.0.0)    | ase (v3.19.0)         |
