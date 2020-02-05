@@ -7,6 +7,7 @@ import json
 import time
 import warnings
 from shutil import copyfile
+from tabulate import tabulate
 
 from ase import io
 import ase
@@ -100,8 +101,9 @@ def bench_ase(path):
         pass
 
 
-def print_results(data):
-    for package, value in data.items():
+def print_results(results):
+    print()
+    for package, value in results.items():
         print("{} ({})".format(package, value["version"]))
         for result in value["results"]:
             if math.isnan(result["time"]):
@@ -111,14 +113,46 @@ def print_results(data):
                 result["time"],
                 result["repetitions"],
             ))
+
+
+def print_table(results):
+    headers = [
+        "{} (v{})".format(package, result["version"])
+        for package, result in results.items()
+    ]
+    headers.insert(0, "file")
+
+    data = []
+    for i, file in enumerate(FILES):
+        current = [os.path.basename(file)]
+        chemfiles_time = 0
+        for package, value in results.items():
+            timing = value["results"][i]["time"]
+            if math.isnan(timing):
+                current.append("")
+                continue
+
+            if package == "chemfiles":
+                chemfiles_time = timing
+                current.append("{:.2f}ms".format(timing))
+            else:
+                ratio = timing / chemfiles_time
+                if ratio > 1:
+                    current.append("{:.2f}ms - **{:.2f}x**".format(timing, ratio))
+                else:
+                    current.append("{:.2f}ms - {:.2f}x".format(timing, ratio))
+
+        data.append(current)
+
     print()
+    print(tabulate(data, headers=headers, tablefmt="github"))
 
 
 BENCHMARKS = {
-    "ase": bench_ase,
-    "openbabel": bench_openbabel,
-    "MDAnalysis": bench_mdanalysis,
     "chemfiles": bench_chemfiles,
+    "MDAnalysis": bench_mdanalysis,
+    "openbabel": bench_openbabel,
+    "ase": bench_ase,
 }
 
 FILES = [
@@ -150,7 +184,8 @@ def main(use_ramdisk):
                 r = run_benchmark(package, new_path, function)
                 results[package]["results"].append(r)
 
-    print_results(results)
+    # print_results(results)
+    print_table(results)
 
 
 if __name__ == '__main__':

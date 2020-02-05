@@ -3,3 +3,4 @@ MDAnalysis
 openbabel
 ase
 netCDF4
+tabulate
