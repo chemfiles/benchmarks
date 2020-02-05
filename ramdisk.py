@@ -68,7 +68,7 @@ class ram_disk:
             elif sys.platform == "darwin":
                 self.disk = OsXRamDisk(size_in_mb)
             else:
-                raise Error("unable to create a RAM disk for the current OS")
+                raise Exception("unable to create a RAM disk for the current OS")
         else:
             self.disk = TmpDisk()
 

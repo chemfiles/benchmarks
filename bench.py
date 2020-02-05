@@ -16,7 +16,7 @@ import MDAnalysis
 
 from ramdisk import ram_disk
 
-
+# Disable all kind of warnings
 warnings.filterwarnings("ignore")
 openbabel.obErrorLog.StopLogging()
 
@@ -24,7 +24,7 @@ MAX_REPETITIONS = 30
 MAX_TIME_SECONDS = 10
 
 
-def run_benchmark(path, function):
+def run_benchmark(package, path, function):
     # Warm up any file system caches
     runtime = 0
     for _ in range(3):
@@ -32,7 +32,7 @@ def run_benchmark(path, function):
         try:
             function(path)
         except Exception as e:
-            print(e)
+            print("{} can not read {}: {}".format(package, path, e))
             return {
                 "path": path,
                 "repetitions": 0,
@@ -71,12 +71,18 @@ def bench_chemfiles(path):
 
 
 def bench_mdanalysis(path):
+    if path.endswith(".sdf"):
+        raise Exception("format not supported")
+
     universe = MDAnalysis.Universe(path)
     for ts in universe.trajectory:
         pass
 
 
 def bench_openbabel(path):
+    if path.endswith(".nc") or path.endswith(".xtc"):
+        raise Exception("format not supported")
+
     mol = openbabel.OBMol()
     conversion = openbabel.OBConversion()
     conversion.ReadFile(mol, path)
@@ -85,7 +91,12 @@ def bench_openbabel(path):
 
 
 def bench_ase(path):
-    for atoms in ase.io.iread(path):
+    if path.endswith(".nc"):
+        format = "netcdftrajectory"
+    else:
+        format = None
+
+    for atoms in ase.io.iread(path, format=format):
         pass
 
 
@@ -111,9 +122,12 @@ BENCHMARKS = {
 }
 
 FILES = [
-    "files/1vln-triclinic.pdb",
-    "files/water.xyz.gz",
     "files/water.xyz",
+    "files/water.xyz.gz",
+    "files/1vln-triclinic.pdb",
+    "files/lmsd.sdf",
+    "files/ubiquitin.xtc",
+    "files/water.nc",
 ]
 
 
@@ -133,7 +147,7 @@ def main(use_ramdisk):
 
             print("reading {}".format(file))
             for package, function in BENCHMARKS.items():
-                r = run_benchmark(new_path, function)
+                r = run_benchmark(package, new_path, function)
                 results[package]["results"].append(r)
 
     print_results(results)
