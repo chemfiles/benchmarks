@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import os
+import gc
+import sys
+import math
 import json
 import time
-import sys
 import warnings
+from shutil import copyfile
 
-from chemfiles import Trajectory, __version__ as CHEMFILES_VERSION
-from MDAnalysis import Universe, __version__ as MDA_VERSION
+from ase import io
+import ase
+import chemfiles
+import openbabel
+import MDAnalysis
+
+from ramdisk import ram_disk
+
 
 warnings.filterwarnings("ignore")
 
@@ -16,8 +26,22 @@ MAX_TIME_SECONDS = 10
 
 def run_benchmark(path, function):
     # Warm up any file system caches
+    runtime = 0
     for _ in range(3):
-        function(path)
+        before = time.perf_counter()
+        try:
+            function(path)
+        except Exception as e:
+            print(e)
+            return {
+                "path": path,
+                "repetitions": 0,
+                "time": float("nan")
+            }
+        after = time.perf_counter()
+        runtime += after - before
+        if runtime > MAX_TIME_SECONDS / 2:
+            break
 
     # Repeat the benchmark multiple times
     repetitions = 0
@@ -34,85 +58,83 @@ def run_benchmark(path, function):
 
     runtime /= repetitions
     return {
-        "path": path,
+        "path": os.path.basename(path),
         "repetitions": repetitions,
-        "time": runtime * 1e3
+        "time": runtime * 1e3,
     }
 
 
 def bench_chemfiles(path):
-    file = Trajectory(path)
+    file = chemfiles.Trajectory(path)
     for step in range(file.nsteps):
         file.read()
 
 
 def bench_mdanalysis(path):
-    universe = Universe(path)
+    universe = MDAnalysis.Universe(path)
     for ts in universe.trajectory:
         pass
 
 
-def bench_chemfiles_open(path):
-    file = Trajectory(path)
+def bench_openbabel(path):
+    mol = openbabel.OBMol()
+    conversion = openbabel.OBConversion()
+    conversion.ReadFile(mol, path)
+    while conversion.Read(mol):
+        pass
 
 
-def bench_mdanalysis_open(path):
-    universe = Universe(path)
+def bench_ase(path):
+    for atoms in ase.io.iread(path):
+        pass
 
 
 def print_results(data):
-    for code, res in data.items():
-        print("{} ({})".format(code, res["version"]))
-        for result in res["results"]:
-            print("    {} {:.2f}ms".format(result["path"], result["time"]))
+    for package, value in data.items():
+        print("{} ({})".format(package, value["version"]))
+        for result in value["results"]:
+            if math.isnan(result["time"]):
+                continue
+            print("    {:30} {:.2f}ms".format(result["path"], result["time"]))
     print()
 
 
+BENCHMARKS = {
+    "ase": bench_ase,
+    "openbabel": bench_openbabel,
+    "MDAnalysis": bench_mdanalysis,
+    "chemfiles": bench_chemfiles,
+}
+
+FILES = [
+    "files/1vln-triclinic.pdb",
+    "files/water.xyz.gz",
+    "files/water.xyz",
+]
+
+
+def main():
+    results = {}
+    for package in BENCHMARKS.keys():
+        results[package] = {
+            "version": eval(package).__version__,
+            "results": [],
+        }
+
+    with ram_disk() as root:
+        os.mkdir(os.path.join(root, "files"))
+        for file in FILES:
+            new_path = os.path.join(root, file)
+            copyfile(src=file, dst=new_path)
+
+            print("reading {}".format(file))
+            for package, function in BENCHMARKS.items():
+                r = run_benchmark(new_path, function)
+                results[package]["results"].append(r)
+        gc.collect()
+
+    print_results(results)
+
+
 if __name__ == '__main__':
-    FILES = [
-        # "files/1aki.tng",
-        # "files/1j8k.mmcif",
-        "files/1vln-triclinic.pdb",
-        "files/water.6.xyz.gz",
-        "files/water.xyz",
-    ]
-
-    mda = []
-    chemfiles = []
-    for file in FILES:
-        mda.append(run_benchmark(file, bench_mdanalysis_open))
-        chemfiles.append(run_benchmark(file, bench_chemfiles_open))
-
-    results = {
-        "mda": {
-            "version": MDA_VERSION,
-            "results": mda,
-        },
-        "chemfiles": {
-            "version": CHEMFILES_VERSION,
-            "results": chemfiles,
-        },
-    }
-
-    print("Opening files")
-    print_results(results)
-
-    mda = []
-    chemfiles = []
-    for file in FILES:
-        mda.append(run_benchmark(file, bench_mdanalysis))
-        chemfiles.append(run_benchmark(file, bench_chemfiles))
-
-    results = {
-        "mda": {
-            "version": MDA_VERSION,
-            "results": mda,
-        },
-        "chemfiles": {
-            "version": CHEMFILES_VERSION,
-            "results": chemfiles,
-        },
-    }
-
-    print("Reading all steps")
-    print_results(results)
+    main()
