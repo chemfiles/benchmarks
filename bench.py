@@ -33,7 +33,7 @@ def run_benchmark(package, path, function):
         try:
             function(path)
         except Exception as e:
-            print("{} can not read {}: {}".format(package, path, e))
+            print("{} can not read {}: {}".format(package, os.path.basename(path), e))
             return {
                 "path": path,
                 "repetitions": 0,
@@ -160,6 +160,7 @@ FILES = [
     "files/water.xyz.gz",
     "files/1vln-triclinic.pdb",
     "files/lmsd.sdf",
+    "files/vesicles.gro",
     "files/ubiquitin.xtc",
     "files/water.nc",
 ]
