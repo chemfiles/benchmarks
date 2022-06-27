@@ -1,6 +1,0 @@
-chemfiles>=0.9
-MDAnalysis
-openbabel
-ase
-netCDF4
-tabulate

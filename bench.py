@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os
-import sys
 import math
+import os
+import shutil
+import sys
 import time
 import warnings
-from shutil import copyfile
-from tabulate import tabulate
 
-from ase import io  # noqa
 import ase
 import chemfiles
-
-import openbabel  # noqa
-from openbabel import openbabel as ob
-
 import MDAnalysis
-
-from ramdisk import ram_disk
+import openbabel  # noqa
+import pytraj
+from ase import io  # noqa
+from openbabel import openbabel as ob
+from tabulate import tabulate
 
 # Disable all kind of warnings
 warnings.filterwarnings("ignore")
@@ -28,6 +25,7 @@ MAX_TIME_SECONDS = 10
 
 
 def run_benchmark(package, path, function):
+    print(f"    running {package}")
     # Warm up any file system caches
     runtime = 0
     for _ in range(3):
@@ -35,7 +33,7 @@ def run_benchmark(package, path, function):
         try:
             function(path)
         except Exception as e:
-            print("{} can not read {}: {}".format(package, os.path.basename(path), e))
+            print(f"        can not read {os.path.basename(path)}: {e}")
             return {"path": path, "repetitions": 0, "time": float("nan")}
         after = time.perf_counter()
         runtime += after - before
@@ -79,7 +77,12 @@ def bench_mdanalysis(path):
 
 
 def bench_openbabel(path):
-    if path.endswith(".nc") or path.endswith(".xtc"):
+    if (
+        path.endswith(".nc")
+        or path.endswith(".xtc")
+        or path.endswith(".dcd")
+        or path.endswith(".trr")
+    ):
         raise Exception("format not supported")
 
     mol = ob.OBMol()
@@ -90,12 +93,36 @@ def bench_openbabel(path):
 
 
 def bench_ase(path):
+    if path.endswith(".dcd"):
+        # ASE only supports DCD files created by CP2K
+        raise Exception("format not supported")
+
     if path.endswith(".nc"):
         format = "netcdftrajectory"
     else:
         format = None
 
     for atoms in ase.io.iread(path, format=format):
+        pass
+
+
+def bench_pytraj(path):
+    if path.endswith("adk.dcd"):
+        topology = os.path.join(os.path.dirname(path), "adk.psf")
+    elif path.endswith("water.nc"):
+        topology = os.path.join(os.path.dirname(path), "water.pdb")
+    elif path.endswith("ubiquitin.xtc") or path.endswith("ubiquitin.trr"):
+        topology = os.path.join(os.path.dirname(path), "not-ubiquitin.pdb")
+
+    elif path.endswith(".xyz") or path.endswith(".xyz.gz"):
+        raise Exception("format not supported")
+    elif path.endswith(".gro"):
+        raise Exception("format not supported")
+    else:
+        topology = path
+
+    trajectory = pytraj.TrajectoryIterator(path, topology)
+    for step in trajectory:
         pass
 
 
@@ -134,9 +161,10 @@ def print_table(results):
 
 BENCHMARKS = {
     "chemfiles": bench_chemfiles,
-    "MDAnalysis": bench_mdanalysis,
-    "openbabel": bench_openbabel,
-    "ase": bench_ase,
+    # "MDAnalysis": bench_mdanalysis,
+    # "openbabel": bench_openbabel,
+    # "ase": bench_ase,
+    "pytraj": bench_pytraj,
 }
 
 FILES = [
@@ -146,11 +174,13 @@ FILES = [
     "files/lmsd.sdf",
     "files/vesicles.gro",
     "files/ubiquitin.xtc",
+    "files/ubiquitin.trr",
     "files/water.nc",
+    "files/adk.dcd",
 ]
 
 
-def main(use_ramdisk):
+if __name__ == "__main__":
     results = {}
     for package in BENCHMARKS.keys():
         results[package] = {
@@ -158,20 +188,10 @@ def main(use_ramdisk):
             "results": [],
         }
 
-    with ram_disk(use_ramdisk) as root:
-        os.mkdir(os.path.join(root, "files"))
-        for file in FILES:
-            new_path = os.path.join(root, file)
-            copyfile(src=file, dst=new_path)
-
-            print("reading {}".format(file))
-            for package, function in BENCHMARKS.items():
-                r = run_benchmark(package, new_path, function)
-                results[package]["results"].append(r)
+    for file in FILES:
+        print("reading {}".format(file))
+        for package, function in BENCHMARKS.items():
+            r = run_benchmark(package, file, function)
+            results[package]["results"].append(r)
 
     print_table(results)
-
-
-if __name__ == "__main__":
-    use_ramdisk = "--no-ramdisk" not in sys.argv
-    main(use_ramdisk)
