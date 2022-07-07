@@ -8,7 +8,7 @@ set -exu
 conda create -n chemfiles-benchmarks -y
 conda activate chemfiles-benchmarks
 
-conda install MDAnalysis openbabel ase cython chemfiles -y
+conda install MDAnalysis openbabel ase cython chemfiles mdtraj parmed rdkit -y
 conda update --all -y
 
 pip install --upgrade tabulate
@@ -24,12 +24,14 @@ cd cpptraj
 
 if [[ `uname -s` == "Darwin" ]]; then
     yes | bash configure -shared -macAccelerate -noarpack -nosanderlib clang
-    make -j8 libcpptraj
+elif [[ `uname -s` == "Linux" ]]; then
+    yes | bash configure -shared -noarpack -nosanderlib -openmp gnu
 else
     echo "unknown machine"
     exit 1
 fi
 
+make -j8 libcpptraj
 
 export CPPTRAJHOME=`pwd`
 

@@ -1,2 +1,8 @@
 *.pyc
 pytraj-build/
+
+
+files/*.lock
+files/*.npz
+
+results.json

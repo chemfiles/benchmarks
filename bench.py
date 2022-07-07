@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import json
 import math
 import os
 import shutil
@@ -7,14 +8,17 @@ import sys
 import time
 import warnings
 
-import ase
+import ase.io
 import chemfiles
 import MDAnalysis
+import mdtraj
 import openbabel  # noqa
+import parmed
 import pytraj
-from ase import io  # noqa
 from openbabel import openbabel as ob
 from tabulate import tabulate
+
+mdtraj.__version__ = mdtraj.version.full_version
 
 # Disable all kind of warnings
 warnings.filterwarnings("ignore")
@@ -96,6 +100,8 @@ def bench_ase(path):
     if path.endswith(".dcd"):
         # ASE only supports DCD files created by CP2K
         raise Exception("format not supported")
+    elif path.endswith(".mol2"):
+        raise Exception("format not supported")
 
     if path.endswith(".nc"):
         format = "netcdftrajectory"
@@ -124,6 +130,36 @@ def bench_pytraj(path):
     trajectory = pytraj.TrajectoryIterator(path, topology)
     for step in trajectory:
         pass
+
+
+def bench_mdtraj(path):
+    if path.endswith("adk.dcd"):
+        topology = os.path.join(os.path.dirname(path), "adk.psf")
+    elif path.endswith("water.nc"):
+        topology = os.path.join(os.path.dirname(path), "water.pdb")
+    elif path.endswith("ubiquitin.xtc") or path.endswith("ubiquitin.trr"):
+        topology = os.path.join(os.path.dirname(path), "not-ubiquitin.pdb")
+    else:
+        topology = None
+
+    if path.endswith(".xyz") or path.endswith(".xyz.gz"):
+        raise Exception("format not supported")
+    elif path.endswith(".sdf"):
+        raise Exception("format not supported")
+    elif path.endswith(".mol2"):
+        raise Exception("format not supported")
+
+    for step in mdtraj.iterload(path, top=topology):
+        pass
+
+
+def bench_parmed(path):
+    for structure in parmed.load_file(path):
+        pass
+
+
+def bench_rdkit(path):
+    pass
 
 
 def print_table(results):
@@ -161,9 +197,11 @@ def print_table(results):
 
 BENCHMARKS = {
     "chemfiles": bench_chemfiles,
-    # "MDAnalysis": bench_mdanalysis,
-    # "openbabel": bench_openbabel,
-    # "ase": bench_ase,
+    "ase": bench_ase,
+    "MDAnalysis": bench_mdanalysis,
+    "mdtraj": bench_mdtraj,
+    "openbabel": bench_openbabel,
+    "parmed": bench_parmed,
     "pytraj": bench_pytraj,
 }
 
@@ -173,6 +211,7 @@ FILES = [
     "files/1vln-triclinic.pdb",
     "files/lmsd.sdf",
     "files/vesicles.gro",
+    "files/molecules.mol2",
     "files/ubiquitin.xtc",
     "files/ubiquitin.trr",
     "files/water.nc",
@@ -195,3 +234,6 @@ if __name__ == "__main__":
             results[package]["results"].append(r)
 
     print_table(results)
+
+    with open("results.json", "w") as fd:
+        json.dump(results, fd, indent=2)
